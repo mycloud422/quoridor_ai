@@ -1,0 +1,739 @@
+/* ===================================================================
+   Quoridor AI — v_memory aesthetic
+   A dark, glass-morphism, sharp-cornered monochrome UI
+   Fonts: Syne (display) · Space Grotesk (body) · JetBrains Mono (data)
+   =================================================================== */
+
+:root {
+    /* ---- original layout variables (unchanged, used by JS-measured board) ---- */
+    --board-table-side-length: 90vmin;
+    --long-short-ratio: 3.2;
+    --short-length-number-in-board-table: calc(9 * var(--long-short-ratio) + 8);
+    --short-length: calc(var(--board-table-side-length) / var(--short-length-number-in-board-table));
+    --long-length: calc(var(--long-short-ratio) * var(--short-length));
+    --wall-gap: calc(var(--short-length) * 0.25);
+    --wall-length: calc(2 * var(--long-length) + var(--short-length) - 2 * var(--wall-gap));
+    --wall-width: calc(var(--short-length) - 2 * var(--wall-gap));
+    --font-size: 18px;
+
+    /* ---- v_memory palette ---- */
+    --white: #ffffff;
+    --light: #e0e0e0;
+    --mid: #aaaaaa;
+    --dark: #2a2a2a;
+    --black: #0e0e0e;
+    --border: rgba(255, 255, 255, 0.15);
+    --border-hover: rgba(255, 255, 255, 0.3);
+    --card-bg: rgba(25, 25, 25, 0.5);
+    --card-bg-strong: rgba(14, 14, 14, 0.85);
+
+    /* ---- v_memory accents (kept compatible with existing class names) ---- */
+    --pawn-light: var(--white);
+    --pawn-dark: #1a1a1a;
+    --wall: var(--mid);
+    --wall-shadow: rgba(170, 170, 170, 0.4);
+}
+
+/* size of iPad screen is 768px x 1024px in portrait mode */
+@media only screen and (min-width: 768px) and (min-height: 768px) {
+    :root {
+        --font-size: 30px;
+    }
+}
+@media only screen and (min-width: 768px), (orientation: landscape) {
+    :root {
+        --board-table-side-length: 70vmin;
+    }
+}
+
+/* ===================================================================
+   Base
+   =================================================================== */
+html {
+    box-sizing: border-box;
+}
+*, *:before, *:after {
+    box-sizing: inherit;
+}
+
+html, body {
+    height: 100%;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+}
+
+body {
+    background:
+        radial-gradient(ellipse 600px 600px at 3% -8%, rgba(90, 106, 128, 0.5), transparent 65%),
+        radial-gradient(ellipse 550px 550px at 100% 108%, rgba(110, 120, 135, 0.45), transparent 65%),
+        var(--black);
+    background-attachment: fixed;
+    color: var(--white);
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    margin: 0;
+    padding: 0;
+}
+
+a,
+a:link,
+a:visited {
+    color: var(--white);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: rgba(255, 255, 255, 0.35);
+    transition: text-decoration-color 0.2s ease;
+}
+a:hover {
+    text-decoration-color: var(--white);
+}
+a:active {
+    color: var(--mid);
+    text-decoration-color: var(--white);
+}
+
+button {
+    font-family: inherit;
+    border-radius: 0;
+}
+
+/* ===================================================================
+   Top-level layout
+   =================================================================== */
+.gridcontainer0 {
+    display: grid;
+    width: 100%;
+    height: 100vh;
+    justify-content: center;
+    align-content: center;
+    grid-template-rows: calc(3 * var(--font-size)) var(--board-table-side-length) calc(8 * var(--font-size));
+    grid-template-columns: var(--board-table-side-length);
+    grid-gap: 10px;
+    padding: 20px;
+    animation: cardEntry 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes cardEntry {
+    from {
+        opacity: 0;
+        transform: translateY(24px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.gridcontainer1 {
+    display: grid;
+    justify-content: center;
+    align-content: center;
+    grid-template-rows: 1fr;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+}
+.gridcontainer2 {
+    display: grid;
+    justify-content: center;
+    align-content: center;
+    grid-template-rows: 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
+}
+
+h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: calc(1.4 * var(--font-size));
+    letter-spacing: -1px;
+    text-transform: lowercase;
+    color: var(--white);
+    position: relative;
+    display: inline-block;
+    margin-bottom: calc(0.4 * var(--font-size));
+}
+h1::after {
+    content: '';
+    position: absolute;
+    right: calc(-0.5 * var(--font-size));
+    top: calc(0.25 * var(--font-size));
+    width: 5px;
+    height: 5px;
+    background: var(--white);
+}
+
+#board_table_container {
+    position: relative;
+    grid-row-start: 2;
+}
+
+/* ===================================================================
+   Board
+   =================================================================== */
+table {
+    table-layout: fixed;
+    border-radius: 0;
+    background-color: var(--card-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-collapse: collapse;
+    text-align: center;
+    width: var(--board-table-side-length);
+    height: var(--board-table-side-length);
+    padding: 0;
+    box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(255, 255, 255, 0.02),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+td {
+    position: relative;
+    padding: 0;
+}
+tr.row {
+    height: var(--long-length);
+}
+td.col {
+    width: var(--long-length);
+}
+tr.between_rows {
+    height: var(--short-length);
+}
+td.between_cols {
+    width: var(--short-length);
+}
+
+/* the playable squares — v_memory's translucent cell look */
+tr.row td.col {
+    background-color: rgba(255, 255, 255, 0.18);
+    border-radius: 0;
+    transition: background 0.15s ease;
+}
+
+/* ===================================================================
+   Pawns
+   =================================================================== */
+div.pawn {
+    display: inline-block;
+    width: calc(var(--long-length) * 0.7);
+    height: calc(var(--long-length) * 0.7);
+    border-radius: 50%;
+    vertical-align: middle;
+    transition: opacity 0.15s ease, box-shadow 0.2s ease;
+}
+div.pawn.pawn0 {
+    background-color: var(--pawn-light);
+    box-shadow:
+        0 0 16px rgba(255, 255, 255, 0.35),
+        inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+div.pawn.pawn1 {
+    background-color: var(--pawn-dark);
+    box-shadow:
+        0 0 12px rgba(0, 0, 0, 0.6),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* ===================================================================
+   Walls
+   =================================================================== */
+div.horizontal_wall, div.vertical_wall {
+    display: inline-block;
+    position: absolute;
+    left: var(--wall-gap);
+    top: var(--wall-gap);
+    background-color: var(--wall);
+    box-shadow: 0 0 8px var(--wall-shadow);
+}
+div.horizontal_wall {
+    width: var(--wall-length);
+    height: var(--wall-width);
+}
+div.vertical_wall {
+    width: var(--wall-width);
+    height: var(--wall-length);
+}
+div.horizontal_wall.shadow, div.vertical_wall.shadow {
+    opacity: 0.5;
+    box-shadow: none;
+}
+div.pawn.shadow {
+    opacity: 0.3;
+}
+
+/* ===================================================================
+   Wall counter & stat area
+   =================================================================== */
+#number_of_left_walls_box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    text-align: center;
+    vertical-align: middle;
+    color: var(--white);
+    gap: calc(0.4 * var(--font-size));
+}
+#number_of_left_walls_box > div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(0.4 * var(--font-size));
+}
+
+div.pawn.symbol {
+    vertical-align: middle;
+    width: var(--font-size);
+    height: var(--font-size);
+    margin-right: 0;
+}
+div.pawn.button {
+    margin-left: var(--short-length);
+    margin-right: var(--short-length);
+}
+div.horizontal_wall.symbol {
+    position: initial;
+    vertical-align: middle;
+    width: calc(var(--font-size) * (5 / 3));
+    height: calc(var(--font-size) * (2 / 5));
+    margin-left: 0;
+    margin-right: 0;
+    box-shadow: none;
+}
+div.mul_sign_wall_num_container {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    gap: calc(var(--font-size) / 4);
+}
+div.multiplication_sign {
+    display: inline;
+    vertical-align: middle;
+    color: var(--mid);
+    margin: 0;
+}
+div.wall_num {
+    display: inline-block;
+    vertical-align: middle;
+    min-width: var(--font-size);
+    text-align: center;
+    color: var(--white);
+}
+
+/* ===================================================================
+   Overlay panels (fade_box family)
+   =================================================================== */
+.fade_box {
+    position: absolute;
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-evenly;
+    top: calc((var(--board-table-side-length) - 9 * var(--long-length)) / 2);
+    left: 0;
+    width: var(--board-table-side-length);
+    height: calc(9 * var(--long-length));
+    font-size: var(--font-size);
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--white);
+    padding: calc(1.5 * var(--font-size));
+    text-align: center;
+    z-index: -1;
+    visibility: hidden;
+    opacity: 0;
+    background-color: var(--card-bg-strong);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+    letter-spacing: 0.5px;
+}
+.fade_box.in {
+    z-index: 10;
+    visibility: visible;
+    opacity: 1;
+    animation-name: fade_in;
+    animation-duration: 0.4s;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.fade_box.in.about {
+    justify-content: flex-start;
+    top: 0;
+    height: auto;
+    max-height: calc(3 * var(--board-table-side-length));
+    overflow: visible;
+    text-align: left;
+    align-items: flex-start;
+}
+@keyframes fade_in {
+    0%   {opacity: 0; transform: translateY(8px) scale(0.98);}
+    100% {opacity: 1; transform: translateY(0) scale(1);}
+}
+.fade_box.inout {
+    z-index: -1;
+    visibility: hidden;
+    opacity: 0;
+    animation-name: fade_inout;
+}
+@keyframes fade_inout {
+    0%   {visibility: visible; z-index: 10; opacity: 0;}
+    25%  {opacity: 1;}
+    75%  {opacity: 1;}
+    100% {visibility: hidden; z-index: 10; opacity: 0;}
+}
+
+/* All overlays share the dark glass look — remove per-id colors */
+#about_box,
+#update_notification_message_box,
+#choose_ai_level_message_box,
+#choose_pawn_message_box,
+#restart_message_box,
+#game_result_message_box,
+button.restart {
+    background-color: var(--card-bg-strong);
+}
+
+/* ===================================================================
+   Buttons
+   =================================================================== */
+.button_container.above.left, .button_container.below {
+    grid-column: 1 / span 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.button_container.above.left {
+    grid-column: 1 / span 3;
+    gap: calc(0.5 * var(--font-size));
+}
+.button_container.above.right {
+    grid-column-start: 5;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+.button_container.in_message_box {
+    margin-top: calc(0.6 * var(--font-size));
+    gap: calc(0.4 * var(--font-size));
+}
+
+/* All "above"/"below" action buttons — v_memory secondary button look */
+button.button {
+    display: inline-block;
+    height: calc(3 * var(--font-size));
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    padding: 0 calc(0.6 * var(--font-size));
+    background: transparent;
+    color: var(--white);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: calc(var(--font-size) * 0.7);
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-align: center;
+    text-decoration: none;
+    margin: 2%;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+}
+button.button:hover {
+    border-color: var(--border-hover);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.08);
+}
+button.button:active {
+    transform: scale(0.97);
+}
+
+/* In-overlay buttons (level picks, yes/no, update) — v_memory secondary look */
+button.update, button.ai_level, button.close, button.restart_yes_no, button.mode_choice {
+    display: inline-block;
+    height: calc(2.4 * var(--font-size));
+    width: auto;
+    min-width: calc(4 * var(--font-size));
+    border: 1px solid var(--border);
+    border-radius: 0;
+    margin: 2px;
+    padding: 0 calc(0.8 * var(--font-size));
+    background: transparent;
+    color: var(--white);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: calc(var(--font-size) * 0.65);
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.1s ease;
+}
+button.update {
+    height: calc(3 * var(--font-size));
+    width: 100%;
+}
+button.update:hover,
+button.ai_level:hover,
+button.restart_yes_no:hover,
+button.close:hover,
+button.mode_choice:hover {
+    border-color: var(--white);
+    background: rgba(255, 255, 255, 0.08);
+}
+button.update:active,
+button.ai_level:active,
+button.restart_yes_no:active,
+button.close:active,
+button.mode_choice:active {
+    transform: scale(0.97);
+}
+
+/* close button — kept dark for hierarchy inside about box */
+button.close {
+    background: transparent;
+    color: var(--white);
+    border-color: var(--border-hover);
+    display: block;
+    margin: calc(0.8 * var(--font-size)) auto 0;
+}
+
+/* Action button color-coding — flattened to v_memory secondary/primary */
+.button.cancel {
+    background: transparent;
+    color: var(--white);
+    border: 1px solid var(--border);
+}
+.button.cancel:hover {
+    border-color: var(--border-hover);
+}
+.button.confirm {
+    background: var(--white);
+    color: var(--black);
+    border: 1px solid var(--white);
+}
+.button.confirm:hover {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+.button.undo,
+.button.redo,
+.button.aido,
+.button.about,
+.button.restart,
+.button.sound {
+    background: transparent;
+    color: var(--white);
+    border: 1px solid var(--border);
+}
+.button.undo:hover,
+.button.redo:hover,
+.button.aido:hover,
+.button.about:hover,
+.button.restart:hover,
+.button.sound:hover {
+    border-color: var(--border-hover);
+}
+
+/* ===================================================================
+   Message box & progress bar
+   =================================================================== */
+#message_box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: calc(var(--font-size) * 0.95);
+    letter-spacing: -0.5px;
+    text-transform: lowercase;
+    text-align: center;
+    text-decoration: none;
+    color: var(--white);
+    overflow: hidden;
+}
+#progress_bar {
+    position: absolute;
+    z-index: -1;
+    top: 15%;
+    left: 0;
+    /*width: width is set on style property of progress_bar element;*/
+    height: 70%;
+    background-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+    transition: width 0.1s linear;
+}
+
+/* ===================================================================
+   Typography helpers
+   =================================================================== */
+span.no_wrap {
+    white-space: nowrap;
+}
+span.thick {
+    font-weight: 700;
+    color: var(--white);
+}
+p.developed_by, p.release_date, p.last_updated {
+    font-size: calc(0.6 * var(--font-size));
+    color: var(--mid);
+    letter-spacing: 0.3px;
+}
+p.release_date, p.last_updated {
+    margin-block-start: 0.4em;
+    margin-block-end: 0.4em;
+}
+
+#about_box p {
+    color: var(--light);
+    line-height: 1.6;
+    margin-bottom: calc(0.5 * var(--font-size));
+    font-size: calc(0.7 * var(--font-size));
+}
+
+/* Inner elements for the pause overlay (v_memory style) */
+.overlay-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: calc(1.4 * var(--font-size));
+    letter-spacing: -1px;
+    text-transform: lowercase;
+    color: var(--white);
+    margin: 0;
+}
+.overlay-desc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: calc(0.55 * var(--font-size));
+    color: var(--mid);
+    text-align: center;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin: calc(0.3 * var(--font-size)) 0 calc(0.6 * var(--font-size));
+}
+.esc-hint {
+    display: block;
+    margin-top: calc(0.8 * var(--font-size));
+    font-size: calc(0.45 * var(--font-size));
+    color: var(--mid);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    opacity: 0.6;
+}
+
+/* ===================================================================
+   State classes (preserved from original)
+   =================================================================== */
+div.pawn.hidden {
+    visibility: hidden;
+}
+div.pawn.clicked {
+    opacity: 0.7;
+}
+.fade_box.in.hidden, button.button.hidden, input.hidden {
+    display: none;
+}
+.button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+input {
+    width: calc(3 * var(--font-size));
+    background: rgba(0, 0, 0, 0.4);
+    color: var(--white);
+    border: 1px solid var(--border);
+    padding: 6px 8px;
+    border-radius: 0;
+    outline: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: calc(0.7 * var(--font-size));
+    text-align: center;
+    transition: border 0.2s ease;
+}
+input:focus {
+    border-color: var(--white);
+}
+
+/* ===================================================================
+   Responsive
+   =================================================================== */
+@media only screen and (min-width: 768px), (orientation: landscape) {
+    .gridcontainer0 {
+        grid-template-rows: calc(3 * var(--font-size)) var(--board-table-side-length);
+        grid-template-columns: var(--board-table-side-length) calc(95vmin - var(--board-table-side-length));
+    }
+    .gridcontainer2 {
+        display:grid;
+        grid-row-start: 2;
+        grid-column-start: 2;
+        grid-template-columns: 1fr;
+        grid-template-rows: calc(4 * var(--font-size)) calc(4 * var(--font-size)) 1fr;
+    }
+    .button_container.below {
+        grid-column: unset;
+        flex-direction: column-reverse;
+        justify-content: flex-start;
+    }
+}
+@media only screen and (min-width: 768px) and (min-height: 768px) {
+    .fade_box {
+        top: calc((var(--board-table-side-length) - 7 * var(--long-length)) / 2);
+        left: 0;
+        width: var(--board-table-side-length);
+        height: calc(7 * var(--long-length));
+    }
+}
+/* For iPhone 5&6 landscape */
+@media only screen and (max-height: 375px) and (min-width: 568px) and (orientation:landscape) {
+    .gridcontainer0 {
+        grid-template-columns: var(--board-table-side-length) calc(105vmin - var(--board-table-side-length));
+    }
+}
+
+/* ===================================================================
+   Hover-only devices
+   =================================================================== */
+@media (hover: hover) {
+    #confirm_button, #cancel_button {
+        display: none;
+    }
+    div.pawn.shadow:hover {
+        opacity: 0.7;
+    }
+    div.pawn.button, button.ai_level, button.restart_yes_no, button.update {
+        opacity: 0.9;
+    }
+    div.pawn.button:hover, button.ai_level:hover, button.restart_yes_no:hover, button.update:hover {
+        opacity: 1;
+    }
+    /* board cell hover — subtle v_memory-style highlight */
+    tr.row td.col:hover {
+        background-color: rgba(255, 255, 255, 0.28);
+    }
+}
+
+/* ===================================================================
+   Reduced motion
+   =================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ===================================================================
+   Focus outlines
+   =================================================================== */
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.4);
+    outline-offset: 2px;
+}
