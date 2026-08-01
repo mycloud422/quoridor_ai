@@ -1,6 +1,6 @@
 # Heads UP!
 
-This is a reskin of the previous author's project with some additional tweaks!
+This is a reskin of the Kyutae Lee's project with some additional tweaks!
 
 # Quoridor AI based on Monte Carlo Tree Search
 
