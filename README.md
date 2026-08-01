@@ -1,3 +1,7 @@
+# Heads UP!
+
+This is a reskin of the previous author's project with some additional tweaks!
+
 # Quoridor AI based on Monte Carlo Tree Search
 
 [Quoridor](https://en.wikipedia.org/wiki/Quoridor) is an abstract strategy game played on a board of 81 (9x9) square spaces where the objective is to get your pawn to the opposite side of the board.
